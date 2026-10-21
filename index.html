@@ -182,6 +182,14 @@
       if (!n) { ctx.beginPath(); ctx.arc(200, 200, 180, 0, 2 * Math.PI); ctx.fillStyle = "#e0e0e0"; ctx.fill(); ctx.fillStyle = "#666"; ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.fillText("メンバーを追加してください", 200, 205); return; }
       options.forEach((member, i) => { const angle = currentAngle + i * arc; ctx.beginPath(); ctx.arc(200,200,180,angle,angle+arc); ctx.lineTo(200,200); ctx.fillStyle=colors[i%colors.length]; ctx.fill(); ctx.stroke(); ctx.save(); ctx.translate(200,200); ctx.rotate(angle+arc/2); ctx.textAlign="right"; ctx.fillStyle="#fff"; ctx.font="bold 16px sans-serif"; ctx.fillText(member.name,160,5); ctx.restore(); });
     }
+    function memberUnderPointer(options) {
+      // Canvasの真上（12時方向）は 3π/2。実際に矢印の下にある扇形を返す。
+      const arc = 2 * Math.PI / options.length;
+      const pointerAngle = 1.5 * Math.PI;
+      const wheelAngle = ((currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      const offset = ((pointerAngle - wheelAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+      return options[Math.min(options.length - 1, Math.floor(offset / arc))];
+    }
     function addMember() { const name = safeName(input.value); if (name) { membersRef.push(name).catch(reportHostError); input.value = ""; } }
     addBtn.addEventListener("click", addMember); input.addEventListener("keydown", e => { if (e.key === "Enter") addMember(); });
     spinBtn.addEventListener("click", () => {
@@ -202,7 +210,11 @@
         currentAngle = startAngle + distance * eased;
         drawRoulette();
         if (t < 1) requestAnimationFrame(animate);
-        else { isSpinning = false; result.textContent = `結果: ${roundMembers[winnerIndex].name}！`; }
+        else {
+          isSpinning = false;
+          // 抽選時の番号ではなく、最終描画で矢印が指している名前を表示する。
+          result.textContent = `結果: ${memberUnderPointer(roundMembers).name}！`;
+        }
       }
       requestAnimationFrame(animate);
     });
