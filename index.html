@@ -8,33 +8,56 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-    body { background: #f4f7f6; color: #333; }
-    .container { display: flex; flex-direction: column; max-width: 1000px; margin: 0 auto; padding: 20px; gap: 20px; }
-    @media (min-width: 768px) { .container { flex-direction: row; } }
-    .main-content, .sidebar, .user-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 5px #0000001a; }
-    .main-content { flex: 2; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-    .sidebar { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
-    .roulette-wrapper { position: relative; margin: 20px 0; }
-    .arrow { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 24px; color: #e74c3c; z-index: 1; }
-    button { padding: 8px 12px; background: #3498db; color: white; border: 0; border-radius: 4px; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: not-allowed; }
-    #spin-btn { padding: 12px 30px; font-size: 18px; background: #2ecc71; border-radius: 25px; margin-bottom: 15px; }
-    .input-group { display: flex; gap: 5px; }
-    .input-group input, .user-card input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-    .danger-btn, .delete-btn { background: #e74c3c; }
-    .danger-btn { margin-top: 10px; }
-    #member-list { list-style: none; max-height: 260px; overflow-y: auto; border: 1px solid #eee; padding: 5px; }
-    #member-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 5px 7px 10px; border-bottom: 1px solid #eee; }
-    .delete-btn { padding: 4px 8px; font-size: 13px; }
-    .modal { position: fixed; inset: 0; display: flex; justify-content: center; align-items: center; background: #0008; z-index: 10; }
-    .modal-content { background: white; padding: 25px; border-radius: 8px; text-align: center; }
-    .hidden { display: none !important; }
-    .user-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .user-card { width: 100%; max-width: 380px; padding: 30px 20px; display: flex; flex-direction: column; gap: 15px; text-align: center; }
-    .user-card input, .user-card button { padding: 12px; font-size: 16px; width: 100%; }
-    .user-card button { background: #2ecc71; font-weight: bold; }
-    .notice { font-size: 13px; color: #666; line-height: 1.5; }
+    :root { --ink:#182033; --muted:#71809b; --paper:#fffdf8; --purple:#6548ed; --violet:#9a62ff; --mint:#37d5ae; --line:#e8e7f1; --danger:#ff5f6d; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Inter, ui-rounded, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+    body { min-height:100vh; color:var(--ink); background:radial-gradient(circle at 5% 0%,#d9d3ff 0,transparent 31rem),radial-gradient(circle at 95% 95%,#c0f5e8 0,transparent 32rem),#f7f7fc; }
+    .container { display:flex; flex-direction:column; max-width:1120px; margin:0 auto; padding:30px 20px; gap:22px; }
+    @media (min-width:850px) { .container { flex-direction:row; align-items:stretch; min-height:100vh; } }
+    .main-content,.sidebar,.user-card { background:rgba(255,253,248,.92); border:1px solid rgba(255,255,255,.9); box-shadow:0 20px 50px rgba(44,37,90,.12); backdrop-filter:blur(14px); }
+    .main-content { flex:1.7; display:flex; flex-direction:column; align-items:center; padding:31px 28px 25px; border-radius:28px; overflow:hidden; position:relative; }
+    .main-content::before { content:""; position:absolute; width:300px; height:300px; border-radius:50%; background:#ede9ff; top:-180px; right:-130px; z-index:-1; }
+    .sidebar { flex:1; padding:26px 22px; border-radius:28px; display:flex; flex-direction:column; gap:16px; }
+    .eyebrow { color:var(--purple); font-size:11px; letter-spacing:.16em; font-weight:800; }
+    .title-row { width:100%; display:flex; align-items:center; justify-content:space-between; margin-top:5px; }
+    h1 { font-size:clamp(27px,4vw,38px); letter-spacing:-.07em; }
+    .host-badge { color:#5540d2; background:#e9e5ff; border-radius:999px; padding:6px 10px; font-size:11px; font-weight:800; letter-spacing:.08em; }
+    .roulette-wrapper { position:relative; margin:21px 0 16px; padding:11px; border-radius:50%; background:linear-gradient(140deg,#fff,#e8e4ff); box-shadow:0 14px 25px #4c3d9329, inset 0 0 0 1px #fff; }
+    canvas { display:block; width:min(75vw,400px); height:auto; border-radius:50%; box-shadow:inset 0 0 0 7px #fff; }
+    .arrow { position:absolute; top:-6px; left:50%; transform:translateX(-50%); color:#ff5d75; font-size:32px; line-height:1; z-index:1; filter:drop-shadow(0 3px 2px #43276138); }
+    button { border:0; border-radius:12px; padding:10px 13px; color:white; background:linear-gradient(135deg,#7354ef,#4c75ee); box-shadow:0 7px 13px #574bc42e; cursor:pointer; transition:transform .17s,box-shadow .17s,filter .17s; font:inherit; font-weight:750; }
+    button:hover:not(:disabled) { transform:translateY(-2px); filter:brightness(1.04); box-shadow:0 11px 19px #574bc43d; }
+    button:active:not(:disabled) { transform:translateY(0); }
+    button:disabled { opacity:.55; cursor:not-allowed; box-shadow:none; }
+    #spin-btn { width:min(100%,340px); border-radius:16px; padding:16px 30px; font-size:18px; letter-spacing:.05em; background:linear-gradient(120deg,#ff7f81,#f64f74); box-shadow:0 11px 20px #f64f7440; }
+    #result { min-height:32px; margin-top:15px; font-size:22px; color:#432eae; letter-spacing:-.04em; }
+    .notice { min-height:20px; font-size:12px; color:var(--muted); line-height:1.5; text-align:center; }
+    .side-heading { display:flex; align-items:center; justify-content:space-between; }
+    .side-heading h2 { font-size:20px; letter-spacing:-.04em; }
+    .member-count { color:#6655c9; background:#eeebff; border-radius:999px; padding:4px 9px; font-weight:800; font-size:12px; }
+    .input-group { display:flex; gap:8px; }
+    .input-group input,.user-card input { flex:1; min-width:0; padding:12px 13px; color:var(--ink); background:#fff; border:1px solid #dedcea; border-radius:12px; outline:0; font:inherit; transition:border .2s,box-shadow .2s; }
+    .input-group input:focus,.user-card input:focus { border-color:#876df3; box-shadow:0 0 0 4px #8064ed1c; }
+    #add-btn { padding-inline:16px; }
+    #member-list { list-style:none; display:flex; flex-direction:column; gap:7px; min-height:115px; max-height:275px; overflow-y:auto; padding:2px; }
+    #member-list:empty::after { content:"参加者を待っています…"; padding:34px 8px; border:1px dashed #d6d2e4; border-radius:14px; color:#9490a3; font-size:13px; text-align:center; }
+    #member-list li { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 9px 9px 13px; background:#f6f5fb; border-radius:12px; font-size:14px; font-weight:650; }
+    .delete-btn { padding:5px 8px; border-radius:8px; background:#fff; color:#e25667; box-shadow:none; font-size:12px; }
+    .danger-btn { color:#e25667; background:#fff1f2; box-shadow:none; }
+    #qr-btn { margin-top:auto; background:#272a4b; }
+    .modal { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; padding:20px; background:#1717339c; z-index:10; backdrop-filter:blur(6px); }
+    .modal-content { width:min(100%,350px); padding:28px; border-radius:24px; background:#fffdf8; color:var(--ink); text-align:center; box-shadow:0 25px 60px #0b0b204d; }
+    .modal-content h3 { font-size:20px; }
+    #qrcode { width:180px; height:180px; padding:8px; margin:20px auto!important; background:white; border:1px solid #eeeaf8; border-radius:16px; }
+    #qrcode img { border-radius:8px; }
+    .hidden { display:none!important; }
+    .user-container { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:22px; }
+    .user-card { width:100%; max-width:415px; padding:37px 28px 29px; border-radius:29px; display:flex; flex-direction:column; gap:17px; text-align:center; }
+    .join-mark { width:58px; height:58px; display:grid; place-items:center; margin:0 auto 3px; color:#fff; border-radius:19px; background:linear-gradient(145deg,#8061f4,#4b7bed); box-shadow:0 12px 22px #5d55d63d; font-size:27px; }
+    .user-card h2 { font-size:26px; letter-spacing:-.06em; }
+    .user-card .notice { font-size:13px; }
+    .user-card input,.user-card button { padding:14px; font-size:16px; width:100%; }
+    .user-card button { border-radius:14px; background:linear-gradient(120deg,#41cfa7,#2fbbbc); box-shadow:0 10px 18px #2bb9ab36; }
+    @media (max-width:430px) { .container{padding:14px}.main-content{padding:25px 15px 21px}.sidebar{padding:22px 16px}.user-card{padding:32px 21px 24px} }
   </style>
 </head>
 <body><div id="app"></div>
@@ -62,7 +85,7 @@
   if (isJoinMode) {
     // QR参加者は joinRequests に名前を追加するだけ。members には一切書き込まない。
     appEl.innerHTML = `<div class="user-container"><div class="user-card">
-      <h2>ルーレットに参加</h2><p class="notice">名前を送信するとホスト画面に追加されます。</p>
+      <div class="join-mark">✦</div><p class="eyebrow">JOIN THE GAME</p><h2>ルーレットに参加</h2><p class="notice">名前を送信すると、ホスト画面にすぐ追加されます。</p>
       <input id="join-name-input" maxlength="40" placeholder="あなたの名前" autocomplete="off">
       <button id="submit-join-btn" disabled>接続を確認中…</button><p id="join-status" class="notice">Firebaseへ接続しています…</p>
     </div></div>`;
@@ -107,9 +130,10 @@
   } else {
     // ホスト画面。QRの参加画面は joinRequests にしか書き込まない。
     appEl.innerHTML = `<div class="container"><main class="main-content">
-      <h1>ルーレット</h1><div class="roulette-wrapper"><div class="arrow">▼</div><canvas id="roulette" width="400" height="400"></canvas></div>
-      <button id="spin-btn">スタート！</button><h2 id="result"></h2><p id="host-status" class="notice"></p>
-    </main><aside class="sidebar"><h2>メンバー一覧</h2>
+      <p class="eyebrow">LIVE ROULETTE</p><div class="title-row"><h1>今日のルーレット</h1><span class="host-badge">HOST</span></div>
+      <div class="roulette-wrapper"><div class="arrow">▼</div><canvas id="roulette" width="400" height="400"></canvas></div>
+      <button id="spin-btn">ルーレットを回す</button><h2 id="result"></h2><p id="host-status" class="notice"></p>
+    </main><aside class="sidebar"><div class="side-heading"><h2>メンバー</h2><span id="member-count" class="member-count">0人</span></div>
       <div class="input-group"><input id="member-input" maxlength="40" placeholder="名前を入力"><button id="add-btn">追加</button></div>
       <ul id="member-list"></ul><button id="qr-btn">参加用QRコードを表示</button><button id="reset-btn" class="danger-btn">メンバー全削除</button>
       <div id="qr-modal" class="modal hidden"><div class="modal-content"><h3>スマホで読み込んで参加</h3><div id="qrcode" style="margin:15px auto"></div><button id="close-qr-btn">閉じる</button></div></div>
@@ -117,7 +141,7 @@
     let members = []; let currentAngle = 0; let isSpinning = false;
     const canvas = document.getElementById("roulette"), ctx = canvas.getContext("2d");
     const spinBtn = document.getElementById("spin-btn"), addBtn = document.getElementById("add-btn");
-    const input = document.getElementById("member-input"), list = document.getElementById("member-list");
+    const input = document.getElementById("member-input"), list = document.getElementById("member-list"), memberCount = document.getElementById("member-count");
     const result = document.getElementById("result"), hostStatus = document.getElementById("host-status");
     const colors = ["#f39c12", "#e74c3c", "#9b59b6", "#3498db", "#1abc9c", "#2ecc71"];
     function reportHostError(error) {
@@ -142,6 +166,7 @@
     }
     function updateUI() {
       list.innerHTML = "";
+      memberCount.textContent = `${members.length}人`;
       members.forEach(member => {
         const li = document.createElement("li"), label = document.createElement("span"), remove = document.createElement("button");
         label.textContent = member.name; remove.textContent = "削除"; remove.className = "delete-btn";
