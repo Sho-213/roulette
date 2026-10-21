@@ -41,11 +41,11 @@
     #member-list { list-style:none; display:flex; flex-direction:column; gap:7px; min-height:115px; max-height:275px; overflow-y:auto; padding:2px; }
     #member-list:empty::after { content:"参加者を待っています…"; padding:34px 8px; border:1px dashed #d6d2e4; border-radius:14px; color:#9490a3; font-size:13px; text-align:center; }
     #member-list li { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 9px 9px 13px; background:#f6f5fb; border-radius:12px; font-size:14px; font-weight:650; }
-    #member-list li.winner { flex-wrap:wrap; background:linear-gradient(100deg,#fff3c9,#fffaf0); box-shadow:inset 0 0 0 1px #ffd76e; }
+    #member-list li.winner { background:linear-gradient(100deg,#fff3c9,#fffaf0); box-shadow:inset 0 0 0 1px #ffd76e; }
     #member-list li.eliminated { color:#9b97a7; text-decoration:line-through; background:#f1f0f4; }
     .member-main { min-width:0; overflow-wrap:anywhere; }
-    .winner-actions { display:flex; width:100%; gap:7px; margin-top:8px; padding-top:8px; border-top:1px solid #f0d889; }
-    .winner-actions button { flex:1; padding:7px 8px; border-radius:9px; box-shadow:none; font-size:12px; }
+    .winner-actions { display:flex; width:min(100%,340px); gap:8px; margin:4px 0 8px; }
+    .winner-actions button { flex:1; padding:9px 8px; border-radius:10px; box-shadow:none; font-size:13px; }
     .keep-btn { background:#35b997; }
     .eliminate-btn { background:#ef6374; }
     .delete-btn { padding:5px 8px; border-radius:8px; background:#fff; color:#e25667; box-shadow:none; font-size:12px; }
@@ -143,7 +143,7 @@
     appEl.innerHTML = `<div class="container"><main class="main-content">
       <p class="eyebrow">LIVE ROULETTE</p><div class="title-row"><h1>今日のルーレット</h1><span class="host-badge">HOST</span></div>
       <div class="roulette-wrapper"><div class="arrow" aria-hidden="true"></div><canvas id="roulette" width="400" height="400"></canvas></div>
-      <button id="spin-btn">ルーレットを回す</button><h2 id="result"></h2><p id="host-status" class="notice"></p>
+      <button id="spin-btn">ルーレットを回す</button><h2 id="result"></h2><div id="winner-actions" class="winner-actions hidden"></div><p id="host-status" class="notice"></p>
     </main><aside class="sidebar"><div class="side-heading"><h2>メンバー</h2><span id="member-count" class="member-count">0人</span></div>
       <div class="input-group"><input id="member-input" maxlength="40" placeholder="名前を入力"><button id="add-btn">追加</button></div>
       <ul id="member-list"></ul><button id="qr-btn">参加用QRコードを表示</button><button id="reset-btn" class="danger-btn">メンバー全削除</button>
@@ -153,7 +153,7 @@
     const canvas = document.getElementById("roulette"), ctx = canvas.getContext("2d");
     const spinBtn = document.getElementById("spin-btn"), addBtn = document.getElementById("add-btn");
     const input = document.getElementById("member-input"), list = document.getElementById("member-list"), memberCount = document.getElementById("member-count");
-    const result = document.getElementById("result"), hostStatus = document.getElementById("host-status");
+    const result = document.getElementById("result"), hostStatus = document.getElementById("host-status"), winnerActions = document.getElementById("winner-actions");
     const colors = ["#f39c12", "#e74c3c", "#9b59b6", "#3498db", "#1abc9c", "#2ecc71"];
     function reportHostError(error) {
       console.error("Firebaseエラー", error);
@@ -203,19 +203,8 @@
         const li = document.createElement("li"), label = document.createElement("span");
         label.className = "member-main"; label.textContent = member.name;
         if (member.eliminated) li.classList.add("eliminated");
-        if (member.id === lastWinnerId && !member.eliminated) {
-          li.classList.add("winner");
-          const actions = document.createElement("div"); actions.className = "winner-actions";
-          const keep = document.createElement("button"), eliminate = document.createElement("button");
-          keep.textContent = "残す"; keep.className = "keep-btn";
-          eliminate.textContent = "削除"; eliminate.className = "eliminate-btn";
-          keep.addEventListener("click", () => { lastWinnerId = null; updateUI(); });
-          eliminate.addEventListener("click", () => {
-            lastWinnerId = null;
-            Promise.all(member.ids.map(id => membersRef.child(id).set({ name: member.name, eliminated: true }))).catch(reportHostError);
-          });
-          actions.append(keep, eliminate); li.append(label, actions);
-        } else li.append(label);
+        if (member.id === lastWinnerId && !member.eliminated) li.classList.add("winner");
+        li.append(label);
         list.appendChild(li);
       });
       drawRoulette();
@@ -235,6 +224,19 @@
       const offset = ((pointerAngle - wheelAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
       return options[Math.min(options.length - 1, Math.floor(offset / arc))];
     }
+    function showWinnerActions(winner) {
+      winnerActions.innerHTML = "";
+      winnerActions.classList.remove("hidden");
+      const keep = document.createElement("button"), eliminate = document.createElement("button");
+      keep.textContent = "残す"; keep.className = "keep-btn";
+      eliminate.textContent = "削除"; eliminate.className = "eliminate-btn";
+      keep.addEventListener("click", () => { lastWinnerId = null; winnerActions.classList.add("hidden"); updateUI(); });
+      eliminate.addEventListener("click", () => {
+        lastWinnerId = null; winnerActions.classList.add("hidden");
+        Promise.all(winner.ids.map(id => membersRef.child(id).set({ name: winner.name, eliminated: true }))).catch(reportHostError);
+      });
+      winnerActions.append(keep, eliminate);
+    }
     function addMember() { const name = safeName(input.value); if (name) { membersRef.child(memberKey(name)).set({ name, eliminated: false }).catch(reportHostError); input.value = ""; } }
     addBtn.addEventListener("click", addMember); input.addEventListener("keydown", e => { if (e.key === "Enter") addMember(); });
     spinBtn.addEventListener("click", () => {
@@ -242,7 +244,7 @@
       if (isSpinning || !eligibleMembers.length) return;
       // この回の候補を固定してから抽選する。
       roundMembers = eligibleMembers.slice();
-      isSpinning = true; result.textContent = "";
+      isSpinning = true; result.textContent = ""; winnerActions.classList.add("hidden");
       const winnerIndex = Math.floor(Math.random() * roundMembers.length);
       const arc = 2 * Math.PI / roundMembers.length;
       const pointerAngle = 1.5 * Math.PI;
@@ -262,6 +264,7 @@
           const winner = memberUnderPointer(roundMembers);
           lastWinnerId = winner.id;
           result.textContent = `結果: ${winner.name}！`;
+          showWinnerActions(winner);
           updateUI();
         }
       }
@@ -276,7 +279,7 @@
         const pending = await joinRequestsRef.once("value");
         await Promise.all(Object.keys(pending.val() || {}).map(id => joinRequestsRef.child(id).remove()));
         await membersRef.remove();
-        members = []; roundMembers = null; lastWinnerId = null; currentAngle = 0; result.textContent = "";
+        members = []; roundMembers = null; lastWinnerId = null; currentAngle = 0; result.textContent = ""; winnerActions.classList.add("hidden");
         updateUI();
         hostStatus.style.color = "#2ecc71";
         hostStatus.textContent = "メンバーを全削除しました。";
