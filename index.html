@@ -235,7 +235,22 @@
       }
       requestAnimationFrame(animate);
     });
-    document.getElementById("reset-btn").addEventListener("click", () => { if (confirm("全員削除しますか？")) membersRef.remove().catch(reportHostError); });
+    document.getElementById("reset-btn").addEventListener("click", async () => {
+      if (!confirm("全員削除しますか？")) return;
+      const resetBtn = document.getElementById("reset-btn");
+      resetBtn.disabled = true;
+      try {
+        // 保留中の参加リクエストも消して、全削除直後に再追加されるのを防ぐ。
+        const pending = await joinRequestsRef.once("value");
+        await Promise.all(Object.keys(pending.val() || {}).map(id => joinRequestsRef.child(id).remove()));
+        await membersRef.remove();
+        members = []; roundMembers = null; currentAngle = 0; result.textContent = "";
+        updateUI();
+        hostStatus.style.color = "#2ecc71";
+        hostStatus.textContent = "メンバーを全削除しました。";
+      } catch (error) { reportHostError(error); }
+      finally { resetBtn.disabled = false; }
+    });
     const modal=document.getElementById("qr-modal");
     document.getElementById("qr-btn").addEventListener("click", () => { modal.classList.remove("hidden"); const el=document.getElementById("qrcode"); el.innerHTML=""; new QRCode(el,{text:`${location.origin}${location.pathname}?mode=join`,width:180,height:180}); });
     document.getElementById("close-qr-btn").addEventListener("click", () => modal.classList.add("hidden"));
