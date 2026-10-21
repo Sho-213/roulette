@@ -40,16 +40,15 @@
 <body><div id="app"></div>
 <script>
   const firebaseConfig = {
-  apiKey: "AIzaSyBSyPytTDEdSWes8n0-4o3_Hu85oHe6EUI",
-  authDomain: "roulette-e24a5.firebaseapp.com",
-  databaseURL: "https://roulette-e24a5-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "roulette-e24a5",
-  storageBucket: "roulette-e24a5.firebasestorage.app",
-  messagingSenderId: "361439895925",
-  appId: "1:361439895925:web:15a270ff7844b966eb333c",
-  measurementId: "G-NSPL1FB5J5"
+    apiKey: "AIzaSyBSyPytTDEdSWes8n0-4o3_Hu85oHe6EUI",
+    authDomain: "roulette-e24a5.firebaseapp.com",
+    databaseURL: "https://roulette-e24a5-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "roulette-e24a5",
+    storageBucket: "roulette-e24a5.firebasestorage.app",
+    messagingSenderId: "361439895925",
+    appId: "1:361439895925:web:15a270ff7844b966eb333c",
+    measurementId: "G-NSPL1FB5J5"
   };
-  
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
   const membersRef = db.ref("roulette/members");
@@ -121,6 +120,11 @@
     const input = document.getElementById("member-input"), list = document.getElementById("member-list");
     const result = document.getElementById("result"), hostStatus = document.getElementById("host-status");
     const colors = ["#f39c12", "#e74c3c", "#9b59b6", "#3498db", "#1abc9c", "#2ecc71"];
+    function reportHostError(error) {
+      console.error("Firebaseエラー", error);
+      hostStatus.style.color = "#e74c3c";
+      hostStatus.textContent = `Firebaseエラー: ${error.code || error.message}`;
+    }
     hostStatus.textContent = "ホストとして操作中";
     hostStatus.style.color = "#2ecc71";
     listenForJoinRequests();
@@ -128,20 +132,20 @@
       const data = snapshot.val() || {};
       members = Object.entries(data).map(([id, name]) => ({ id, name: safeName(name) })).filter(m => m.name);
       updateUI();
-    });
+    }, reportHostError);
     function listenForJoinRequests() {
       joinRequestsRef.on("child_added", async snapshot => {
         const name = safeName(snapshot.val() && snapshot.val().name);
         if (!name) return;
         try { await membersRef.push(name); await snapshot.ref.remove(); } catch (error) { console.error(error); }
-      });
+      }, reportHostError);
     }
     function updateUI() {
       list.innerHTML = "";
       members.forEach(member => {
         const li = document.createElement("li"), label = document.createElement("span"), remove = document.createElement("button");
         label.textContent = member.name; remove.textContent = "削除"; remove.className = "delete-btn";
-        remove.addEventListener("click", () => { if (confirm(`「${member.name}」さんを削除しますか？`)) membersRef.child(member.id).remove(); });
+        remove.addEventListener("click", () => { if (confirm(`「${member.name}」さんを削除しますか？`)) membersRef.child(member.id).remove().catch(reportHostError); });
         li.append(label, remove); list.appendChild(li);
       });
       drawRoulette();
@@ -151,7 +155,7 @@
       if (!n) { ctx.beginPath(); ctx.arc(200, 200, 180, 0, 2 * Math.PI); ctx.fillStyle = "#e0e0e0"; ctx.fill(); ctx.fillStyle = "#666"; ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.fillText("メンバーを追加してください", 200, 205); return; }
       members.forEach((member, i) => { const angle = currentAngle + i * arc; ctx.beginPath(); ctx.arc(200,200,180,angle,angle+arc); ctx.lineTo(200,200); ctx.fillStyle=colors[i%colors.length]; ctx.fill(); ctx.stroke(); ctx.save(); ctx.translate(200,200); ctx.rotate(angle+arc/2); ctx.textAlign="right"; ctx.fillStyle="#fff"; ctx.font="bold 16px sans-serif"; ctx.fillText(member.name,160,5); ctx.restore(); });
     }
-    function addMember() { const name = safeName(input.value); if (name) { membersRef.push(name); input.value = ""; } }
+    function addMember() { const name = safeName(input.value); if (name) { membersRef.push(name).catch(reportHostError); input.value = ""; } }
     addBtn.addEventListener("click", addMember); input.addEventListener("keydown", e => { if (e.key === "Enter") addMember(); });
     spinBtn.addEventListener("click", () => {
       if (isSpinning || !members.length) return;
@@ -173,7 +177,7 @@
       }
       requestAnimationFrame(animate);
     });
-    document.getElementById("reset-btn").addEventListener("click", () => { if (confirm("全員削除しますか？")) membersRef.remove(); });
+    document.getElementById("reset-btn").addEventListener("click", () => { if (confirm("全員削除しますか？")) membersRef.remove().catch(reportHostError); });
     const modal=document.getElementById("qr-modal");
     document.getElementById("qr-btn").addEventListener("click", () => { modal.classList.remove("hidden"); const el=document.getElementById("qrcode"); el.innerHTML=""; new QRCode(el,{text:`${location.origin}${location.pathname}?mode=join`,width:180,height:180}); });
     document.getElementById("close-qr-btn").addEventListener("click", () => modal.classList.add("hidden"));
