@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>リアルタイム同期ルーレット</title>
+  <title>掃除ルーレット</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -141,12 +141,12 @@
   } else {
     // ホスト画面。QRの参加画面は joinRequests にしか書き込まない。
     appEl.innerHTML = `<div class="container"><main class="main-content">
-      <p class="eyebrow">LIVE ROULETTE</p><div class="title-row"><h1>今日のルーレット</h1><span class="host-badge">HOST</span></div>
+      <p class="eyebrow">ROULETTE</p><div class="title-row"><h1>掃除ルーレット!</h1><span class="host-badge">HOST</span></div>
       <div class="roulette-wrapper"><div class="arrow" aria-hidden="true"></div><canvas id="roulette" width="400" height="400"></canvas></div>
-      <button id="spin-btn">ルーレットを回す</button><h2 id="result"></h2><div id="winner-actions" class="winner-actions hidden"></div><p id="host-status" class="notice"></p>
+      <button id="spin-btn">回す</button><h2 id="result"></h2><div id="winner-actions" class="winner-actions hidden"></div><p id="host-status" class="notice"></p>
     </main><aside class="sidebar"><div class="side-heading"><h2>メンバー</h2><span id="member-count" class="member-count">0人</span></div>
       <div class="input-group"><input id="member-input" maxlength="40" placeholder="名前を入力"><button id="add-btn">追加</button></div>
-      <ul id="member-list"></ul><button id="qr-btn">参加用QRコードを表示</button><button id="reset-btn" class="danger-btn">メンバー全削除</button>
+      <ul id="member-list"></ul><button id="qr-btn">QRコードを表示</button><button id="reset-btn" class="danger-btn">全削除</button>
       <div id="qr-modal" class="modal hidden"><div class="modal-content"><h3>スマホで読み込んで参加</h3><div id="qrcode" style="margin:15px auto"></div><button id="close-qr-btn">閉じる</button></div></div>
     </aside></div>`;
     let members = []; let currentAngle = 0; let isSpinning = false; let roundMembers = null; let lastWinnerId = null;
