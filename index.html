@@ -23,7 +23,7 @@
     .host-badge { color:#5540d2; background:#e9e5ff; border-radius:999px; padding:6px 10px; font-size:11px; font-weight:800; letter-spacing:.08em; }
     .roulette-wrapper { position:relative; margin:21px 0 16px; padding:11px; border-radius:50%; background:linear-gradient(140deg,#fff,#e8e4ff); box-shadow:0 14px 25px #4c3d9329, inset 0 0 0 1px #fff; }
     canvas { display:block; width:min(75vw,400px); height:auto; border-radius:50%; box-shadow:inset 0 0 0 7px #fff; }
-    .arrow { position:absolute; top:-6px; left:50%; transform:translateX(-50%); color:#ff5d75; font-size:32px; line-height:1; z-index:1; filter:drop-shadow(0 3px 2px #43276138); }
+    .arrow { position:absolute; top:-13px; left:50%; transform:translateX(-50%); width:0; height:0; border-inline:15px solid transparent; border-top:24px solid #ff5d75; z-index:1; filter:drop-shadow(0 3px 2px #43276138); }
     button { border:0; border-radius:12px; padding:10px 13px; color:white; background:linear-gradient(135deg,#7354ef,#4c75ee); box-shadow:0 7px 13px #574bc42e; cursor:pointer; transition:transform .17s,box-shadow .17s,filter .17s; font:inherit; font-weight:750; }
     button:hover:not(:disabled) { transform:translateY(-2px); filter:brightness(1.04); box-shadow:0 11px 19px #574bc43d; }
     button:active:not(:disabled) { transform:translateY(0); }
@@ -138,7 +138,7 @@
       <ul id="member-list"></ul><button id="qr-btn">参加用QRコードを表示</button><button id="reset-btn" class="danger-btn">メンバー全削除</button>
       <div id="qr-modal" class="modal hidden"><div class="modal-content"><h3>スマホで読み込んで参加</h3><div id="qrcode" style="margin:15px auto"></div><button id="close-qr-btn">閉じる</button></div></div>
     </aside></div>`;
-    let members = []; let currentAngle = 0; let isSpinning = false;
+    let members = []; let currentAngle = 0; let isSpinning = false; let roundMembers = null;
     const canvas = document.getElementById("roulette"), ctx = canvas.getContext("2d");
     const spinBtn = document.getElementById("spin-btn"), addBtn = document.getElementById("add-btn");
     const input = document.getElementById("member-input"), list = document.getElementById("member-list"), memberCount = document.getElementById("member-count");
@@ -176,17 +176,21 @@
       drawRoulette();
     }
     function drawRoulette() {
-      const n = members.length, arc = 2 * Math.PI / (n || 1); ctx.clearRect(0, 0, 400, 400);
+      // 回転中は開始時点の配列を使う。参加者の追加で当選位置がずれないようにする。
+      const options = roundMembers || members;
+      const n = options.length, arc = 2 * Math.PI / (n || 1); ctx.clearRect(0, 0, 400, 400);
       if (!n) { ctx.beginPath(); ctx.arc(200, 200, 180, 0, 2 * Math.PI); ctx.fillStyle = "#e0e0e0"; ctx.fill(); ctx.fillStyle = "#666"; ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.fillText("メンバーを追加してください", 200, 205); return; }
-      members.forEach((member, i) => { const angle = currentAngle + i * arc; ctx.beginPath(); ctx.arc(200,200,180,angle,angle+arc); ctx.lineTo(200,200); ctx.fillStyle=colors[i%colors.length]; ctx.fill(); ctx.stroke(); ctx.save(); ctx.translate(200,200); ctx.rotate(angle+arc/2); ctx.textAlign="right"; ctx.fillStyle="#fff"; ctx.font="bold 16px sans-serif"; ctx.fillText(member.name,160,5); ctx.restore(); });
+      options.forEach((member, i) => { const angle = currentAngle + i * arc; ctx.beginPath(); ctx.arc(200,200,180,angle,angle+arc); ctx.lineTo(200,200); ctx.fillStyle=colors[i%colors.length]; ctx.fill(); ctx.stroke(); ctx.save(); ctx.translate(200,200); ctx.rotate(angle+arc/2); ctx.textAlign="right"; ctx.fillStyle="#fff"; ctx.font="bold 16px sans-serif"; ctx.fillText(member.name,160,5); ctx.restore(); });
     }
     function addMember() { const name = safeName(input.value); if (name) { membersRef.push(name).catch(reportHostError); input.value = ""; } }
     addBtn.addEventListener("click", addMember); input.addEventListener("keydown", e => { if (e.key === "Enter") addMember(); });
     spinBtn.addEventListener("click", () => {
       if (isSpinning || !members.length) return;
+      // この回の候補を固定してから抽選する。
+      roundMembers = members.slice();
       isSpinning = true; result.textContent = "";
-      const winnerIndex = Math.floor(Math.random() * members.length);
-      const arc = 2 * Math.PI / members.length;
+      const winnerIndex = Math.floor(Math.random() * roundMembers.length);
+      const arc = 2 * Math.PI / roundMembers.length;
       const pointerAngle = 1.5 * Math.PI;
       const current = ((currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
       const desired = ((pointerAngle - (winnerIndex + .5) * arc) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
@@ -198,7 +202,7 @@
         currentAngle = startAngle + distance * eased;
         drawRoulette();
         if (t < 1) requestAnimationFrame(animate);
-        else { isSpinning = false; result.textContent = `結果: ${members[winnerIndex].name}！`; }
+        else { isSpinning = false; result.textContent = `結果: ${roundMembers[winnerIndex].name}！`; }
       }
       requestAnimationFrame(animate);
     });
