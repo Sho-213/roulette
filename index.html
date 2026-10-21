@@ -139,15 +139,24 @@
       display: none !important;
     }
 
-    /* 参加者（ユーザー）専用カードスタイル */
+    /* 参加者（ユーザー）専用画面のデザイン */
+    .user-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #f4f7f6;
+      padding: 20px;
+    }
+
     .user-card {
       background: white;
       padding: 30px 20px;
       border-radius: 12px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.1);
       text-align: center;
-      max-width: 400px;
-      margin: 50px auto;
+      width: 100%;
+      max-width: 380px;
       display: flex;
       flex-direction: column;
       gap: 15px;
@@ -158,6 +167,7 @@
       font-size: 16px;
       border: 1px solid #ccc;
       border-radius: 6px;
+      width: 100%;
     }
 
     .user-card button {
@@ -165,69 +175,15 @@
       font-size: 16px;
       background-color: #2ecc71;
       font-weight: bold;
+      width: 100%;
     }
   </style>
 </head>
 <body>
-  <!-- メインコンテナ -->
-  <div id="app-container">
-    <!-- ホスト用HTML要素 -->
-    <div id="host-view" class="container">
-      <main class="main-content">
-        <h1>ルーレット</h1>
-        <div class="roulette-wrapper">
-          <div class="arrow">▼</div>
-          <canvas id="roulette" width="400" height="400"></canvas>
-        </div>
-        <button id="spin-btn">スタート！</button>
-        <h2 id="result"></h2>
-      </main>
 
-      <aside class="sidebar">
-        <h2>メンバー一覧</h2>
-        <div class="input-group">
-          <input type="text" id="member-input" placeholder="名前を入力">
-          <button id="add-btn">追加</button>
-        </div>
-        
-        <ul id="member-list"></ul>
-
-        <div class="qr-section">
-          <button id="qr-btn">参加用QRコードを表示</button>
-          <button id="reset-btn" class="danger-btn">メンバー全削除</button>
-          
-          <div id="qr-modal" class="modal hidden">
-            <div class="modal-content" style="background: white; padding: 25px; border-radius: 8px; text-align: center;">
-              <h3>スマホで読み込んで参加</h3>
-              <div id="qrcode" style="margin: 15px auto;"></div>
-              <button id="close-qr-btn">閉じる</button>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </div>
-  </div>
+  <div id="app"></div>
 
   <script>
-    // URL引数判定 (?mode=join があるかどうか)
-    const urlParams = new URLSearchParams(window.location.search);
-    const isUserMode = urlParams.get("mode") === "join";
-
-    // ユーザーモード（QR読込側）の場合：ホスト画面（ルーレット、ボタン、リスト等）を完全に消去して差し替える
-    if (isUserMode) {
-      const appContainer = document.getElementById("app-container");
-      // ホスト用のHTML要素を完全に消し去り、送信フォームだけに書き換える
-      appContainer.innerHTML = `
-        <div class="user-card">
-          <h2>ルーレットに参加</h2>
-          <p style="font-size: 14px; color: #666;">名前を入力して送信すると画面に追加されます。</p>
-          <input type="text" id="join-name-input" placeholder="あなたの名前">
-          <button id="submit-join-btn">送信して参加</button>
-          <p id="join-status" style="font-size: 14px;"></p>
-        </div>
-      `;
-    }
-
     // --- Firebase 設定 (Realtime Database用) ---
     const firebaseConfig = {
   apiKey: "AIzaSyBSyPytTDEdSWes8n0-4o3_Hu85oHe6EUI",
@@ -244,19 +200,36 @@
     const db = firebase.database();
     const membersRef = db.ref("roulette/members");
 
-    let members = [];
+    // URLパラメータのチェック
+    const urlParams = new URLSearchParams(window.location.search);
+    const isUserMode = urlParams.get("mode") === "join";
+    const appEl = document.getElementById("app");
 
-    // --- ユーザー（参加者）モードの処理 ---
     if (isUserMode) {
-      const joinNameInput = document.getElementById("join-name-input");
-      const submitJoinBtn = document.getElementById("submit-join-btn");
-      const joinStatus = document.getElementById("join-status");
+      // ==========================================
+      // 【参加者（ユーザー）側の画面・ロジック】
+      // ==========================================
+      appEl.innerHTML = `
+        <div class="user-container">
+          <div class="user-card">
+            <h2>ルーレットに参加</h2>
+            <p style="font-size: 14px; color: #666;">名前を入力して送信すると、ホストの画面に自動で追加されます。</p>
+            <input type="text" id="join-name-input" placeholder="あなたの名前" autocomplete="off">
+            <button id="submit-join-btn">送信して参加</button>
+            <p id="join-status" style="font-size: 14px; margin-top: 5px;"></p>
+          </div>
+        </div>
+      `;
 
-      // 最新メンバー数を把握するために監視
+      let members = [];
       membersRef.on("value", (snapshot) => {
         const data = snapshot.val();
         members = data ? (Array.isArray(data) ? data : Object.values(data)) : [];
       });
+
+      const joinNameInput = document.getElementById("join-name-input");
+      const submitJoinBtn = document.getElementById("submit-join-btn");
+      const joinStatus = document.getElementById("join-status");
 
       submitJoinBtn.addEventListener("click", () => {
         const name = joinNameInput.value.trim();
@@ -270,7 +243,6 @@
         joinStatus.style.color = "#333";
         joinStatus.textContent = "送信中...";
 
-        // メンバーを追加
         membersRef.set([...members, name]).then(() => {
           joinStatus.style.color = "#2ecc71";
           joinStatus.textContent = `「${name}」さんを追加しました！`;
@@ -282,7 +254,47 @@
       });
 
     } else {
-      // --- ホスト（親画面）モードの処理 ---
+      // ==========================================
+      // 【ホスト（親）側の画面・ロジック】
+      // ==========================================
+      appEl.innerHTML = `
+        <div class="container">
+          <main class="main-content">
+            <h1>ルーレット</h1>
+            <div class="roulette-wrapper">
+              <div class="arrow">▼</div>
+              <canvas id="roulette" width="400" height="400"></canvas>
+            </div>
+            <button id="spin-btn">スタート！</button>
+            <h2 id="result"></h2>
+          </main>
+
+          <aside class="sidebar">
+            <h2>メンバー一覧</h2>
+            <div class="input-group">
+              <input type="text" id="member-input" placeholder="名前を入力">
+              <button id="add-btn">追加</button>
+            </div>
+            
+            <ul id="member-list"></ul>
+
+            <div class="qr-section">
+              <button id="qr-btn">参加用QRコードを表示</button>
+              <button id="reset-btn" class="danger-btn">メンバー全削除</button>
+              
+              <div id="qr-modal" class="modal hidden">
+                <div class="modal-content" style="background: white; padding: 25px; border-radius: 8px; text-align: center;">
+                  <h3>スマホで読み込んで参加</h3>
+                  <div id="qrcode" style="margin: 15px auto;"></div>
+                  <button id="close-qr-btn">閉じる</button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      `;
+
+      let members = [];
       let currentAngle = 0;
       let isSpinning = false;
 
@@ -405,7 +417,6 @@
       qrBtn.addEventListener("click", () => {
         qrModal.classList.remove("hidden");
         
-        // 末尾に必ず ?mode=join を付けた参加専用URLを生成
         const baseUrl = window.location.href.split('?')[0];
         const joinUrl = `${baseUrl}?mode=join`;
 
