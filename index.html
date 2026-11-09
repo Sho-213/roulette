@@ -106,7 +106,7 @@
   if (isJoinMode) {
     appEl.innerHTML = `<div class="user-container"><div class="user-card">
       <div class="join-mark">✦</div><p class="eyebrow">JOIN THE GAME</p><h2>ルーレットに参加</h2>
-      <p class="notice">登校時間によってルーレットの幅（当たりやすさ）が変わります！</p>
+      <p class="notice">遅く来るほどルーレットの幅（当たりやすさ）が大きくなります！</p>
       
       <p class="form-label">名前</p>
       <input id="join-name-input" maxlength="40" placeholder="あなたの名前" autocomplete="off">
@@ -149,10 +149,10 @@
       try {
         await joinRequestsRef.push({ 
           name, 
-          arrivalTime, 
+          arrivalTime: arrivalTime || TIME_SLOTS[0].label, 
           createdAt: firebase.database.ServerValue.TIMESTAMP 
         });
-        status.style.color = "#2ecc71"; status.textContent = `「${name}」さんを送信しました。`;
+        status.style.color = "#2ecc71"; status.textContent = `「${name}」さん（${arrivalTime}）を送信しました。`;
         input.value = "";
       } catch (error) {
         console.error(error);
@@ -190,7 +190,7 @@
 
     function getWeight(arrivalTime) {
       const slot = TIME_SLOTS.find(s => s.label === arrivalTime);
-      return slot ? slot.weight : 1.0;
+      return slot ? slot.weight : TIME_SLOTS[0].weight;
     }
 
     function reportHostError(error) {
@@ -209,16 +209,25 @@
       Object.entries(data).forEach(([id, rawMember]) => {
         const isObject = rawMember && typeof rawMember === "object";
         const name = safeName(isObject ? rawMember.name : rawMember);
-        // arrivalTime が未設定・不正な場合はデフォルトでなく選択肢の最初、または保持している値を安全に取得
-        const arrivalTime = (isObject && rawMember.arrivalTime) ? rawMember.arrivalTime : TIME_SLOTS[0].label;
+        
+        let arrivalTime = (isObject && rawMember.arrivalTime) ? rawMember.arrivalTime : null;
+        if (!arrivalTime) {
+          arrivalTime = TIME_SLOTS[0].label;
+          membersRef.child(id).update({ arrivalTime, eliminated: Boolean(isObject && rawMember.eliminated) });
+        }
+
         if (!name) return;
         const key = name.toLocaleLowerCase();
         const eliminated = Boolean(isObject && rawMember.eliminated);
+        
         if (unique.has(key)) {
           const existing = unique.get(key);
           existing.ids.push(id);
-          if (existing.eliminated && !eliminated) { existing.id = id; existing.eliminated = false; existing.arrivalTime = arrivalTime; }
-        } else unique.set(key, { id, ids: [id], name, arrivalTime, eliminated });
+          existing.arrivalTime = arrivalTime;
+          if (existing.eliminated && !eliminated) { existing.id = id; existing.eliminated = false; }
+        } else {
+          unique.set(key, { id, ids: [id], name, arrivalTime, eliminated });
+        }
       });
       members = [...unique.values()];
       if (!isSpinning) roundMembers = null;
@@ -229,7 +238,6 @@
       joinRequestsRef.on("child_added", async snapshot => {
         const val = snapshot.val();
         const name = safeName(val && val.name);
-        // 参加者から送られてきた arrivalTime を確実に取得する（無い場合は朝礼前）
         const arrivalTime = (val && val.arrivalTime) ? val.arrivalTime : TIME_SLOTS[0].label;
         if (!name) return;
         try {
