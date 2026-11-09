@@ -34,21 +34,22 @@
     .side-heading { display:flex; align-items:center; justify-content:space-between; }
     .side-heading h2 { font-size:20px; letter-spacing:-.04em; }
     .member-count { color:#6655c9; background:#eeebff; border-radius:999px; padding:4px 9px; font-weight:800; font-size:12px; }
-    .input-group { display:flex; gap:8px; }
-    .input-group input,.user-card input { flex:1; min-width:0; padding:12px 13px; color:var(--ink); background:#fff; border:1px solid #dedcea; border-radius:12px; outline:0; font:inherit; transition:border .2s,box-shadow .2s; }
-    .input-group input:focus,.user-card input:focus { border-color:#876df3; box-shadow:0 0 0 4px #8064ed1c; }
+    .input-group { display:flex; flex-direction:column; gap:8px; }
+    .input-group-row { display:flex; gap:8px; }
+    .input-group input, .input-group select, .user-card input, .user-card select { flex:1; min-width:0; padding:12px 13px; color:var(--ink); background:#fff; border:1px solid #dedcea; border-radius:12px; outline:0; font:inherit; transition:border .2s,box-shadow .2s; }
+    .input-group input:focus, .input-group select:focus, .user-card input:focus, .user-card select:focus { border-color:#876df3; box-shadow:0 0 0 4px #8064ed1c; }
     #add-btn { padding-inline:16px; }
     #member-list { list-style:none; display:flex; flex-direction:column; gap:7px; min-height:115px; max-height:275px; overflow-y:auto; padding:2px; }
     #member-list:empty::after { content:"参加者を待っています…"; padding:34px 8px; border:1px dashed #d6d2e4; border-radius:14px; color:#9490a3; font-size:13px; text-align:center; }
     #member-list li { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 9px 9px 13px; background:#f6f5fb; border-radius:12px; font-size:14px; font-weight:650; }
     #member-list li.winner { background:linear-gradient(100deg,#fff3c9,#fffaf0); box-shadow:inset 0 0 0 1px #ffd76e; }
     #member-list li.eliminated { color:#9b97a7; text-decoration:line-through; background:#f1f0f4; }
-    .member-main { min-width:0; overflow-wrap:anywhere; }
+    .member-main { min-width:0; overflow-wrap:anywhere; display:flex; flex-direction:column; }
+    .member-time { font-size:11px; color:#71809b; font-weight: normal; }
     .winner-actions { display:flex; width:min(100%,340px); gap:8px; margin:4px 0 8px; }
     .winner-actions button { flex:1; padding:9px 8px; border-radius:10px; box-shadow:none; font-size:13px; }
     .keep-btn { background:#35b997; }
     .eliminate-btn { background:#ef6374; }
-    .delete-btn { padding:5px 8px; border-radius:8px; background:#fff; color:#e25667; box-shadow:none; font-size:12px; }
     .danger-btn { color:#e25667; background:#fff1f2; box-shadow:none; }
     #qr-btn { margin-top:auto; background:#272a4b; }
     .modal { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; padding:20px; background:#1717339c; z-index:10; backdrop-filter:blur(6px); }
@@ -62,8 +63,9 @@
     .join-mark { width:58px; height:58px; display:grid; place-items:center; margin:0 auto 3px; color:#fff; border-radius:19px; background:linear-gradient(145deg,#8061f4,#4b7bed); box-shadow:0 12px 22px #5d55d63d; font-size:27px; }
     .user-card h2 { font-size:26px; letter-spacing:-.06em; }
     .user-card .notice { font-size:13px; }
-    .user-card input,.user-card button { padding:14px; font-size:16px; width:100%; }
-    .user-card button { border-radius:14px; background:linear-gradient(120deg,#41cfa7,#2fbbbc); box-shadow:0 10px 18px #2bb9ab36; }
+    .user-card input, .user-card select, .user-card button { padding:14px; font-size:15px; width:100%; }
+    .user-card button { border-radius:14px; background:linear-gradient(120deg,#41cfa7,#2fbbbc); box-shadow:0 10px 18px #2bb9ab36; font-size:16px; }
+    .form-label { text-align:left; font-size:13px; font-weight:700; color:var(--purple); margin-bottom:-10px; }
     @media (max-width:430px) { .container{padding:14px}.main-content{padding:25px 15px 21px}.sidebar{padding:22px 16px}.user-card{padding:32px 21px 24px} }
   </style>
 </head>
@@ -87,25 +89,45 @@
   const isJoinMode = params.get("mode") === "join";
   const appEl = document.getElementById("app");
 
+  // 登校時間ごとの「ルーレット比率（幅）」の重み付け
+  const TIME_SLOTS = [
+    { label: "9:30~10:00(朝礼前)", weight: 0.5 },
+    { label: "10:00~11:00(1時間目)", weight: 0.8 },
+    { label: "11:00~12:00(2時間目)", weight: 1.1 },
+    { label: "12:00~13:00(昼休み)", weight: 1.4 },
+    { label: "13:00~14:00(3時間目)", weight: 1.7 },
+    { label: "14:00~15:00(4時間目)", weight: 2.0 }
+  ];
+
   function safeName(value) { return String(value || "").trim().slice(0, 40); }
   function memberKey(name) {
-    // Firebaseキーに使えない文字を避け、同じ名前は常に同じ場所へ保存する。
     return `join-${encodeURIComponent(name.toLocaleLowerCase()).replace(/\./g, "%2E")}`;
   }
 
   if (isJoinMode) {
-    // QR参加者は joinRequests に名前を追加するだけ。members には一切書き込まない。
+    // 参加者用画面（質問と選択肢を追加）
     appEl.innerHTML = `<div class="user-container"><div class="user-card">
-      <div class="join-mark">✦</div><p class="eyebrow">JOIN THE GAME</p><h2>ルーレットに参加</h2><p class="notice">名前を送信すると、ホスト画面にすぐ追加されます。</p>
+      <div class="join-mark">✦</div><p class="eyebrow">JOIN THE GAME</p><h2>ルーレットに参加</h2>
+      <p class="notice">登校時間によってルーレットの幅（当たりやすさ）が変わります！</p>
+      
+      <p class="form-label">名前</p>
       <input id="join-name-input" maxlength="40" placeholder="あなたの名前" autocomplete="off">
-      <button id="submit-join-btn" disabled>接続を確認中…</button><p id="join-status" class="notice">Firebaseへ接続しています…</p>
+      
+      <p class="form-label">登校時間は？</p>
+      <select id="join-time-select">
+        ${TIME_SLOTS.map(slot => `<option value="${slot.label}">${slot.label}</option>`).join('')}
+      </select>
+
+      <button id="submit-join-btn" disabled>接続を確認中…</button>
+      <p id="join-status" class="notice">Firebaseへ接続しています…</p>
     </div></div>`;
+
     const input = document.getElementById("join-name-input");
+    const select = document.getElementById("join-time-select");
     const button = document.getElementById("submit-join-btn");
     const status = document.getElementById("join-status");
     let isConnected = false;
-    // 未接続時に送信を開始すると、Realtime Databaseは応答待ちのままになるため、
-    // 送信ボタンを接続完了後だけ有効にする。
+
     db.ref(".info/connected").on("value", snapshot => {
       isConnected = snapshot.val() === true;
       button.disabled = !isConnected;
@@ -115,9 +137,10 @@
         status.textContent = "Firebaseに接続できません。公開URL・databaseURL・ネットワークを確認してください。";
       } else if (!status.textContent.includes("送信")) {
         status.style.color = "#666";
-        status.textContent = "名前を入力して送信してください。";
+        status.textContent = "名前と登校時間を選択して送信してください。";
       }
     });
+
     async function submit() {
       if (!isConnected) {
         status.style.color = "#e74c3c";
@@ -125,10 +148,16 @@
         return;
       }
       const name = safeName(input.value);
+      const arrivalTime = select.value;
       if (!name) { status.style.color = "#e74c3c"; status.textContent = "名前を入力してください。"; return; }
+      
       button.disabled = true; status.style.color = "#333"; status.textContent = "送信中…";
       try {
-        await joinRequestsRef.push({ name, createdAt: firebase.database.ServerValue.TIMESTAMP });
+        await joinRequestsRef.push({ 
+          name, 
+          arrivalTime, 
+          createdAt: firebase.database.ServerValue.TIMESTAMP 
+        });
         status.style.color = "#2ecc71"; status.textContent = `「${name}」さんを送信しました。`;
         input.value = "";
       } catch (error) {
@@ -138,23 +167,39 @@
     }
     button.addEventListener("click", submit);
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+
   } else {
-    // ホスト画面。QRの参加画面は joinRequests にしか書き込まない。
+    // ホスト画面
     appEl.innerHTML = `<div class="container"><main class="main-content">
       <p class="eyebrow">ROULETTE</p><div class="title-row"><h1>掃除ルーレット!</h1><span class="host-badge">HOST</span></div>
       <div class="roulette-wrapper"><div class="arrow" aria-hidden="true"></div><canvas id="roulette" width="400" height="400"></canvas></div>
       <button id="spin-btn">回す</button><h2 id="result"></h2><div id="winner-actions" class="winner-actions hidden"></div><p id="host-status" class="notice"></p>
     </main><aside class="sidebar"><div class="side-heading"><h2>メンバー</h2><span id="member-count" class="member-count">0人</span></div>
-      <div class="input-group"><input id="member-input" maxlength="40" placeholder="名前を入力"><button id="add-btn">追加</button></div>
+      <div class="input-group">
+        <input id="member-input" maxlength="40" placeholder="直接追加する名前">
+        <div class="input-group-row">
+          <select id="member-time-select">
+            ${TIME_SLOTS.map(slot => `<option value="${slot.label}">${slot.label}</option>`).join('')}
+          </select>
+          <button id="add-btn">追加</button>
+        </div>
+      </div>
       <ul id="member-list"></ul><button id="qr-btn">QRコードを表示</button><button id="reset-btn" class="danger-btn">全削除</button>
       <div id="qr-modal" class="modal hidden"><div class="modal-content"><h3>スマホで読み込んで参加</h3><div id="qrcode" style="margin:15px auto"></div><button id="close-qr-btn">閉じる</button></div></div>
     </aside></div>`;
+
     let members = []; let currentAngle = 0; let isSpinning = false; let roundMembers = null; let lastWinnerId = null;
     const canvas = document.getElementById("roulette"), ctx = canvas.getContext("2d");
     const spinBtn = document.getElementById("spin-btn"), addBtn = document.getElementById("add-btn");
-    const input = document.getElementById("member-input"), list = document.getElementById("member-list"), memberCount = document.getElementById("member-count");
+    const input = document.getElementById("member-input"), selectTime = document.getElementById("member-time-select"), list = document.getElementById("member-list"), memberCount = document.getElementById("member-count");
     const result = document.getElementById("result"), hostStatus = document.getElementById("host-status"), winnerActions = document.getElementById("winner-actions");
     const colors = ["#f39c12", "#e74c3c", "#9b59b6", "#3498db", "#1abc9c", "#2ecc71"];
+
+    function getWeight(arrivalTime) {
+      const slot = TIME_SLOTS.find(s => s.label === arrivalTime);
+      return slot ? slot.weight : 1.0;
+    }
+
     function reportHostError(error) {
       console.error("Firebaseエラー", error);
       hostStatus.style.color = "#e74c3c";
@@ -162,46 +207,50 @@
     }
     hostStatus.textContent = "ホストとして操作中";
     hostStatus.style.color = "#2ecc71";
+
     listenForJoinRequests();
+
     membersRef.on("value", snapshot => {
       const data = snapshot.val() || {};
-      // 以前の版で作られた重複データが残っていても、画面とルーレットには1回だけ出す。
       const unique = new Map();
       Object.entries(data).forEach(([id, rawMember]) => {
         const isObject = rawMember && typeof rawMember === "object";
         const name = safeName(isObject ? rawMember.name : rawMember);
+        const arrivalTime = (isObject && rawMember.arrivalTime) ? rawMember.arrivalTime : TIME_SLOTS[0].label;
         if (!name) return;
         const key = name.toLocaleLowerCase();
         const eliminated = Boolean(isObject && rawMember.eliminated);
         if (unique.has(key)) {
           const existing = unique.get(key);
           existing.ids.push(id);
-          // 同名の古いデータが混在している場合は、残っている方を優先する。
-          if (existing.eliminated && !eliminated) { existing.id = id; existing.eliminated = false; }
-        } else unique.set(key, { id, ids: [id], name, eliminated });
+          if (existing.eliminated && !eliminated) { existing.id = id; existing.eliminated = false; existing.arrivalTime = arrivalTime; }
+        } else unique.set(key, { id, ids: [id], name, arrivalTime, eliminated });
       });
       members = [...unique.values()];
-      // 削除・追加後は直前の抽選スナップショットを使わず、現在の一覧を描画する。
       if (!isSpinning) roundMembers = null;
       updateUI();
     }, reportHostError);
+
     function listenForJoinRequests() {
       joinRequestsRef.on("child_added", async snapshot => {
-        const name = safeName(snapshot.val() && snapshot.val().name);
+        const val = snapshot.val();
+        const name = safeName(val && val.name);
+        const arrivalTime = (val && val.arrivalTime) || TIME_SLOTS[0].label;
         if (!name) return;
         try {
-          // 名前から作った固定IDへ保存するため、送信が重なっても重複しない。
-          await membersRef.child(memberKey(name)).set({ name, eliminated: false });
+          await membersRef.child(memberKey(name)).set({ name, arrivalTime, eliminated: false });
           await snapshot.ref.remove();
         } catch (error) { reportHostError(error); }
       }, reportHostError);
     }
+
     function updateUI() {
       list.innerHTML = "";
       memberCount.textContent = `${members.filter(member => !member.eliminated).length}人`;
       members.forEach(member => {
-        const li = document.createElement("li"), label = document.createElement("span");
-        label.className = "member-main"; label.textContent = member.name;
+        const li = document.createElement("li"), label = document.createElement("div");
+        label.className = "member-main"; 
+        label.innerHTML = `<span>${member.name}</span><span class="member-time">${member.arrivalTime || ''}</span>`;
         if (member.eliminated) li.classList.add("eliminated");
         if (member.id === lastWinnerId && !member.eliminated) li.classList.add("winner");
         li.append(label);
@@ -209,21 +258,51 @@
       });
       drawRoulette();
     }
-    function drawRoulette() {
-      // 回転中は開始時点の配列を使う。参加者の追加で当選位置がずれないようにする。
-      const options = roundMembers || members.filter(member => !member.eliminated);
-      const n = options.length, arc = 2 * Math.PI / (n || 1); ctx.clearRect(0, 0, 400, 400);
-      if (!n) { ctx.beginPath(); ctx.arc(200, 200, 180, 0, 2 * Math.PI); ctx.fillStyle = "#e0e0e0"; ctx.fill(); ctx.fillStyle = "#666"; ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.fillText("メンバーを追加してください", 200, 205); return; }
-      options.forEach((member, i) => { const angle = currentAngle + i * arc; ctx.beginPath(); ctx.arc(200,200,180,angle,angle+arc); ctx.lineTo(200,200); ctx.fillStyle=colors[i%colors.length]; ctx.fill(); ctx.stroke(); ctx.save(); ctx.translate(200,200); ctx.rotate(angle+arc/2); ctx.textAlign="right"; ctx.fillStyle="#fff"; ctx.font="bold 16px sans-serif"; ctx.fillText(member.name,160,5); ctx.restore(); });
+
+    // 重みに基づいて各メンバーの扇形の角度（弧）を計算する
+    function getSlices(options) {
+      const totalWeight = options.reduce((sum, m) => sum + getWeight(m.arrivalTime), 0);
+      let currentStart = 0;
+      return options.map(member => {
+        const weight = getWeight(member.arrivalTime);
+        const arc = (weight / (totalWeight || 1)) * 2 * Math.PI;
+        const slice = { member, startAngle: currentStart, endAngle: currentStart + arc, arc };
+        currentStart += arc;
+        return slice;
+      });
     }
+
+    function drawRoulette() {
+      const options = roundMembers || members.filter(member => !member.eliminated);
+      const n = options.length; 
+      ctx.clearRect(0, 0, 400, 400);
+      if (!n) { 
+        ctx.beginPath(); ctx.arc(200, 200, 180, 0, 2 * Math.PI); ctx.fillStyle = "#e0e0e0"; ctx.fill(); 
+        ctx.fillStyle = "#666"; ctx.font = "18px sans-serif"; ctx.textAlign = "center"; 
+        ctx.fillText("メンバーを追加してください", 200, 205); return; 
+      }
+      
+      const slices = getSlices(options);
+      slices.forEach((slice, i) => {
+        const start = currentAngle + slice.startAngle;
+        const end = currentAngle + slice.endAngle;
+        ctx.beginPath(); ctx.arc(200,200,180,start,end); ctx.lineTo(200,200); 
+        ctx.fillStyle=colors[i%colors.length]; ctx.fill(); ctx.stroke(); 
+        ctx.save(); ctx.translate(200,200); ctx.rotate(start + slice.arc/2); 
+        ctx.textAlign="right"; ctx.fillStyle="#fff"; ctx.font="bold 15px sans-serif"; 
+        ctx.fillText(slice.member.name,160,5); ctx.restore(); 
+      });
+    }
+
     function memberUnderPointer(options) {
-      // Canvasの真上（12時方向）は 3π/2。実際に矢印の下にある扇形を返す。
-      const arc = 2 * Math.PI / options.length;
       const pointerAngle = 1.5 * Math.PI;
       const wheelAngle = ((currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
       const offset = ((pointerAngle - wheelAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-      return options[Math.min(options.length - 1, Math.floor(offset / arc))];
+      const slices = getSlices(options);
+      const hit = slices.find(s => offset >= s.startAngle && offset < s.endAngle);
+      return hit ? hit.member : options[0];
     }
+
     function showWinnerActions(winner) {
       winnerActions.innerHTML = "";
       winnerActions.classList.remove("hidden");
@@ -233,24 +312,47 @@
       keep.addEventListener("click", () => { lastWinnerId = null; winnerActions.classList.add("hidden"); updateUI(); });
       eliminate.addEventListener("click", () => {
         lastWinnerId = null; winnerActions.classList.add("hidden");
-        Promise.all(winner.ids.map(id => membersRef.child(id).set({ name: winner.name, eliminated: true }))).catch(reportHostError);
+        Promise.all(winner.ids.map(id => membersRef.child(id).set({ name: winner.name, arrivalTime: winner.arrivalTime, eliminated: true }))).catch(reportHostError);
       });
       winnerActions.append(keep, eliminate);
     }
-    function addMember() { const name = safeName(input.value); if (name) { membersRef.child(memberKey(name)).set({ name, eliminated: false }).catch(reportHostError); input.value = ""; } }
-    addBtn.addEventListener("click", addMember); input.addEventListener("keydown", e => { if (e.key === "Enter") addMember(); });
+
+    function addMember() { 
+      const name = safeName(input.value); 
+      const arrivalTime = selectTime.value;
+      if (name) { 
+        membersRef.child(memberKey(name)).set({ name, arrivalTime, eliminated: false }).catch(reportHostError); 
+        input.value = ""; 
+      } 
+    }
+    addBtn.addEventListener("click", addMember); 
+    input.addEventListener("keydown", e => { if (e.key === "Enter") addMember(); });
+
     spinBtn.addEventListener("click", () => {
       const eligibleMembers = members.filter(member => !member.eliminated);
       if (isSpinning || !eligibleMembers.length) return;
-      // この回の候補を固定してから抽選する。
+      
       roundMembers = eligibleMembers.slice();
       isSpinning = true; result.textContent = ""; winnerActions.classList.add("hidden");
-      const winnerIndex = Math.floor(Math.random() * roundMembers.length);
-      const arc = 2 * Math.PI / roundMembers.length;
+      
+      const slices = getSlices(roundMembers);
+      const totalWeight = roundMembers.reduce((sum, m) => sum + getWeight(m.arrivalTime), 0);
+      
+      // 重みに基いてランダムに当選者を選択
+      let rand = Math.random() * totalWeight;
+      let winningSlice = slices[0];
+      for (const s of slices) {
+        const w = getWeight(s.member.arrivalTime);
+        if (rand < w) { winningSlice = s; break; }
+        rand -= w;
+      }
+
       const pointerAngle = 1.5 * Math.PI;
       const current = ((currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      const desired = ((pointerAngle - (winnerIndex + .5) * arc) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+      const sliceCenter = winningSlice.startAngle + winningSlice.arc / 2;
+      const desired = ((pointerAngle - sliceCenter) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
       const distance = ((desired - current + 2 * Math.PI) % (2 * Math.PI)) + (6 + Math.random() * 2) * 2 * Math.PI;
+      
       const startAngle = currentAngle, duration = 4200, startTime = performance.now();
       function animate(now) {
         const t = Math.min((now - startTime) / duration, 1);
@@ -260,7 +362,6 @@
         if (t < 1) requestAnimationFrame(animate);
         else {
           isSpinning = false;
-          // 抽選時の番号ではなく、最終描画で矢印が指している名前を表示する。
           const winner = memberUnderPointer(roundMembers);
           lastWinnerId = winner.id;
           result.textContent = `結果: ${winner.name}！`;
@@ -270,12 +371,12 @@
       }
       requestAnimationFrame(animate);
     });
+
     document.getElementById("reset-btn").addEventListener("click", async () => {
       if (!confirm("全員削除しますか？")) return;
       const resetBtn = document.getElementById("reset-btn");
       resetBtn.disabled = true;
       try {
-        // 保留中の参加リクエストも消して、全削除直後に再追加されるのを防ぐ。
         const pending = await joinRequestsRef.once("value");
         await Promise.all(Object.keys(pending.val() || {}).map(id => joinRequestsRef.child(id).remove()));
         await membersRef.remove();
@@ -286,6 +387,7 @@
       } catch (error) { reportHostError(error); }
       finally { resetBtn.disabled = false; }
     });
+
     const modal=document.getElementById("qr-modal");
     document.getElementById("qr-btn").addEventListener("click", () => { modal.classList.remove("hidden"); const el=document.getElementById("qrcode"); el.innerHTML=""; new QRCode(el,{text:`${location.origin}${location.pathname}?mode=join`,width:180,height:180}); });
     document.getElementById("close-qr-btn").addEventListener("click", () => modal.classList.add("hidden"));
