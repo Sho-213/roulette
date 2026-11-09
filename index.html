@@ -89,7 +89,6 @@
   const isJoinMode = params.get("mode") === "join";
   const appEl = document.getElementById("app");
 
-  // 登校時間ごとの「ルーレット比率（幅）」の重み付け
   const TIME_SLOTS = [
     { label: "9:30~10:00(朝礼前)", weight: 0.5 },
     { label: "10:00~11:00(1時間目)", weight: 0.8 },
@@ -105,7 +104,6 @@
   }
 
   if (isJoinMode) {
-    // 参加者用画面（質問と選択肢を追加）
     appEl.innerHTML = `<div class="user-container"><div class="user-card">
       <div class="join-mark">✦</div><p class="eyebrow">JOIN THE GAME</p><h2>ルーレットに参加</h2>
       <p class="notice">登校時間によってルーレットの幅（当たりやすさ）が変わります！</p>
@@ -134,7 +132,7 @@
       button.textContent = isConnected ? "送信して参加" : "接続を確認中…";
       if (!isConnected) {
         status.style.color = "#e74c3c";
-        status.textContent = "Firebaseに接続できません。公開URL・databaseURL・ネットワークを確認してください。";
+        status.textContent = "Firebaseに接続できません。";
       } else if (!status.textContent.includes("送信")) {
         status.style.color = "#666";
         status.textContent = "名前と登校時間を選択して送信してください。";
@@ -142,11 +140,7 @@
     });
 
     async function submit() {
-      if (!isConnected) {
-        status.style.color = "#e74c3c";
-        status.textContent = "Firebaseに接続できていません。しばらく待ってから再試行してください。";
-        return;
-      }
+      if (!isConnected) return;
       const name = safeName(input.value);
       const arrivalTime = select.value;
       if (!name) { status.style.color = "#e74c3c"; status.textContent = "名前を入力してください。"; return; }
@@ -161,15 +155,14 @@
         status.style.color = "#2ecc71"; status.textContent = `「${name}」さんを送信しました。`;
         input.value = "";
       } catch (error) {
-        console.error("参加リクエスト送信エラー", error);
-        status.style.color = "#e74c3c"; status.textContent = "送信できませんでした。接続を確認してください。";
+        console.error(error);
+        status.style.color = "#e74c3c"; status.textContent = "送信できませんでした。";
       } finally { button.disabled = !isConnected; }
     }
     button.addEventListener("click", submit);
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
 
   } else {
-    // ホスト画面
     appEl.innerHTML = `<div class="container"><main class="main-content">
       <p class="eyebrow">ROULETTE</p><div class="title-row"><h1>掃除ルーレット!</h1><span class="host-badge">HOST</span></div>
       <div class="roulette-wrapper"><div class="arrow" aria-hidden="true"></div><canvas id="roulette" width="400" height="400"></canvas></div>
@@ -203,7 +196,7 @@
     function reportHostError(error) {
       console.error("Firebaseエラー", error);
       hostStatus.style.color = "#e74c3c";
-      hostStatus.textContent = `Firebaseエラー: ${error.code || error.message}`;
+      hostStatus.textContent = `Firebaseエラー: ${error.message}`;
     }
     hostStatus.textContent = "ホストとして操作中";
     hostStatus.style.color = "#2ecc71";
@@ -216,6 +209,7 @@
       Object.entries(data).forEach(([id, rawMember]) => {
         const isObject = rawMember && typeof rawMember === "object";
         const name = safeName(isObject ? rawMember.name : rawMember);
+        // arrivalTime が未設定・不正な場合はデフォルトでなく選択肢の最初、または保持している値を安全に取得
         const arrivalTime = (isObject && rawMember.arrivalTime) ? rawMember.arrivalTime : TIME_SLOTS[0].label;
         if (!name) return;
         const key = name.toLocaleLowerCase();
@@ -235,7 +229,8 @@
       joinRequestsRef.on("child_added", async snapshot => {
         const val = snapshot.val();
         const name = safeName(val && val.name);
-        const arrivalTime = (val && val.arrivalTime) || TIME_SLOTS[0].label;
+        // 参加者から送られてきた arrivalTime を確実に取得する（無い場合は朝礼前）
+        const arrivalTime = (val && val.arrivalTime) ? val.arrivalTime : TIME_SLOTS[0].label;
         if (!name) return;
         try {
           await membersRef.child(memberKey(name)).set({ name, arrivalTime, eliminated: false });
@@ -259,7 +254,6 @@
       drawRoulette();
     }
 
-    // 重みに基づいて各メンバーの扇形の角度（弧）を計算する
     function getSlices(options) {
       const totalWeight = options.reduce((sum, m) => sum + getWeight(m.arrivalTime), 0);
       let currentStart = 0;
@@ -338,7 +332,6 @@
       const slices = getSlices(roundMembers);
       const totalWeight = roundMembers.reduce((sum, m) => sum + getWeight(m.arrivalTime), 0);
       
-      // 重みに基いてランダムに当選者を選択
       let rand = Math.random() * totalWeight;
       let winningSlice = slices[0];
       for (const s of slices) {
