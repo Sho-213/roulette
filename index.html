@@ -231,7 +231,7 @@
       letter-spacing: 0.08em;
     }
 
-    /* ダーク/ライト切り替えボタン */
+    /* ダーク/ライト切り替え・サウンド切り替えボタン共通 */
     .theme-toggle {
       display: inline-flex;
       align-items: center;
@@ -765,6 +765,107 @@
     document.documentElement.setAttribute("data-theme", getInitialTheme());
 
     // -------------------------------------------------------------
+    // 効果音（Web Audio API & オン・オフ管理）
+    // -------------------------------------------------------------
+    let audioCtx = null;
+    let soundEnabled = false; // デフォルトは音オフ
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      updateSoundToggleButtons();
+    }
+
+    function renderSoundToggleButton() {
+      return `
+        <button type="button" class="theme-toggle" data-sound-toggle aria-label="音声切り替え">
+          <span class="sound-icon"></span>
+          <span class="sound-label"></span>
+        </button>
+      `;
+    }
+
+    function updateSoundToggleButtons() {
+      const soundOnSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
+      const soundOffSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+
+      document.querySelectorAll("[data-sound-toggle]").forEach(btn => {
+        btn.querySelector(".sound-icon").innerHTML = soundEnabled ? soundOnSvg : soundOffSvg;
+        btn.querySelector(".sound-label").textContent = soundEnabled ? "ON" : "OFF";
+      });
+    }
+
+    function bindSoundToggles() {
+      document.querySelectorAll("[data-sound-toggle]").forEach(btn => {
+        btn.addEventListener("click", toggleSound);
+      });
+      updateSoundToggleButtons();
+    }
+
+    function playTickSound() {
+      if (!soundEnabled) return;
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(320, now + 0.035);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.035);
+    }
+
+    function playWinSound() {
+      if (!soundEnabled) return;
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // ド・ミ・ソ・高いド
+
+      notes.forEach((freq, idx) => {
+        const start = now + idx * 0.085;
+        const duration = idx === notes.length - 1 ? 0.45 : 0.14;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.22, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + duration);
+      });
+    }
+
+    // -------------------------------------------------------------
     // 1. Firebaseの設定と初期化
     // -------------------------------------------------------------
     const firebaseConfig = {
@@ -812,14 +913,12 @@
       const overlay = document.getElementById("goat-overlay");
       overlay.innerHTML = "";
       
-      // ランダムにたくさんのヤギの絵文字を画面上に生成
       const count = 25;
       for (let i = 0; i < count; i++) {
         const span = document.createElement("span");
         span.className = "goat-floating";
         span.textContent = "🐐";
         
-        // 画面全体に散らばるようにランダムな位置・遅延を設定
         span.style.left = `${Math.random() * 90 + 5}%`;
         span.style.top = `${Math.random() * 60 + 20}%`;
         span.style.animationDelay = `${Math.random() * 0.4}s`;
@@ -828,7 +927,6 @@
         overlay.appendChild(span);
       }
 
-      // アニメーション終了後に中身をクリア
       setTimeout(() => {
         overlay.innerHTML = "";
       }, 2500);
@@ -838,9 +936,6 @@
     // 2. 画面ごとの振り分け処理（参加者用画面 vs ホスト用画面）
     // -------------------------------------------------------------
     if (isJoinMode) {
-      // -----------------------------------------------------------
-      // [A] スマホから参加するユーザー用の画面構築
-      // -----------------------------------------------------------
       appEl.innerHTML = `
         <div class="user-container">
           <div class="user-card">
@@ -853,7 +948,7 @@
             <p class="notice">遅く来るほどルーレットの幅（当たりやすさ）が大きくなります！</p>
             
             <p class="form-label">名前</p>
-            <input id="join-name-input" maxlength="40" placeholder="あなたの名前 (例: 🐐ヤギ太郎)" autocomplete="off">
+            <input id="join-name-input" maxlength="40" placeholder="あなたの名前" autocomplete="off">
             
             <p class="form-label">登校時間は？</p>
             <select id="join-time-select">
@@ -923,9 +1018,6 @@
       input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
 
     } else {
-      // -----------------------------------------------------------
-      // [B] PCなどでルーレットを回すホスト用の画面構築
-      // -----------------------------------------------------------
       appEl.innerHTML = `
         <div class="container">
           <!-- メイン（ルーレット描写エリア） -->
@@ -934,6 +1026,7 @@
               <p class="eyebrow">ROULETTE</p>
               <div class="header-controls">
                 ${renderThemeToggleButton()}
+                ${renderSoundToggleButton()}
                 <span class="host-badge">HOST</span>
               </div>
             </div>
@@ -982,6 +1075,7 @@
       `;
 
       bindThemeToggles();
+      bindSoundToggles();
 
       let members = [];
       let currentAngle = 0;
@@ -1002,7 +1096,6 @@
       const winnerActions = document.getElementById("winner-actions");
       const colors = ["#f39c12", "#e74c3c", "#9b59b6", "#3498db", "#1abc9c", "#2ecc71"];
 
-      // テーマ変更時にルーレット盤面も再描画
       onThemeChangeCallback = () => drawRoulette();
 
       function getWeight(arrivalTime) {
@@ -1155,8 +1248,10 @@
           ctx.fillStyle = "#ffffff"; 
           ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
           ctx.shadowBlur = 4;
-          ctx.font = "900 15px 'Zen Maru Gothic', 'Noto Sans JP', sans-serif"; 
-          ctx.fillText(slice.member.name, 162, 5); 
+          
+          ctx.font = "900 18px 'Zen Maru Gothic', 'Noto Sans JP', sans-serif"; 
+          ctx.fillText(slice.member.name, 160, 6); 
+          
           ctx.restore(); 
         });
 
@@ -1226,6 +1321,9 @@
         const eligibleMembers = members.filter(member => !member.eliminated);
         if (isSpinning || !eligibleMembers.length) return;
         
+        if (soundEnabled) {
+          getAudioContext();
+        }
         roundMembers = eligibleMembers.slice();
         isSpinning = true; 
         result.textContent = ""; 
@@ -1251,12 +1349,19 @@
         const startAngle = currentAngle;
         const duration = 4200;
         const startTime = performance.now();
+        let lastTickMemberId = memberUnderPointer(roundMembers).id;
         
         function animate(now) {
           const t = Math.min((now - startTime) / duration, 1);
           const eased = 1 - Math.pow(1 - t, 4);
           currentAngle = startAngle + distance * eased;
           drawRoulette();
+
+          const currentTickMember = memberUnderPointer(roundMembers);
+          if (currentTickMember && currentTickMember.id !== lastTickMemberId) {
+            playTickSound();
+            lastTickMemberId = currentTickMember.id;
+          }
           
           if (t < 1) {
             requestAnimationFrame(animate);
@@ -1265,8 +1370,8 @@
             const winner = memberUnderPointer(roundMembers);
             lastWinnerId = winner.id;
             result.textContent = `結果: ${winner.name}！`;
+            playWinSound();
             
-            // 🐐が当たったかどうかを判定（名前に「🐐」または「ヤギ」が含まれているか）
             if (winner.name.includes("🐐") || winner.name.includes("ヤギ")) {
               triggerGoatParty();
             }
